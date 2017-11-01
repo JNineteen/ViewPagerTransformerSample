@@ -2,7 +2,9 @@ package uz.logic.cardanimationexample.adapter;
 
 import android.support.v4.view.PagerAdapter;
 import android.support.v7.widget.CardView;
+import android.view.GestureDetector;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -24,13 +26,15 @@ public class CardPagerAdapter extends PagerAdapter implements CardAdapter {
 
     private List<CardView> cardViewList;
     private List<CardItem> cardItemList;
-    private float mBaseElevation;
-    ClickListener clickListener;
 
-    public CardPagerAdapter(ClickListener clickListener) {
+
+    private float topElevation;
+    private float bottomElevation;
+
+    public CardPagerAdapter() {
         cardViewList = new ArrayList<>();
         cardItemList = new ArrayList<>();
-        this.clickListener=clickListener;
+
     }
 
     public void addCardItem(CardItem item) {
@@ -39,14 +43,16 @@ public class CardPagerAdapter extends PagerAdapter implements CardAdapter {
     }
 
     @Override
-    public float getBaseElevation() {
-        return mBaseElevation;
+    public float getTopElevation() {
+        return topElevation;
     }
+
 
     @Override
     public CardView getCardViewAt(int position) {
         return cardViewList.get(position);
     }
+
 
     @Override
     public int getCount() {
@@ -58,25 +64,37 @@ public class CardPagerAdapter extends PagerAdapter implements CardAdapter {
         return view == object;
     }
 
-
+    ClickListener clickListener;
+     CardView firstCardView;
     @Override
-    public Object instantiateItem(ViewGroup container, int position) {
+    public Object instantiateItem(ViewGroup container, final int position) {
         View view = LayoutInflater.from(container.getContext()).inflate(R.layout.item_card, container, false);
         container.addView(view);
         bind(cardItemList.get(position), view);
-        final CardView cardView = (CardView) view.findViewById(R.id.cardView);
+       firstCardView = (CardView) view.findViewById(R.id.cardView);
 
-        if (mBaseElevation == 0) {
-            mBaseElevation = cardView.getCardElevation();
+
+        if (topElevation == 0) {
+            topElevation = firstCardView.getCardElevation();
         }
 
-        cardView.setMaxCardElevation(mBaseElevation * MAX_ELEVATION_FACTOR);
-        cardViewList.set(position, cardView);
 
-        cardView.setOnClickListener(new View.OnClickListener() {
+        firstCardView.setMaxCardElevation(topElevation * MAX_ELEVATION_FACTOR);
+
+
+        cardViewList.set(position, firstCardView);
+
+        clickListener = (ClickListener) firstCardView.getContext();
+
+        final GestureDetector gestureDetector = new GestureDetector(container.getContext(), new GestureListener(firstCardView,position));
+
+        firstCardView.setOnTouchListener(new View.OnTouchListener() {
             @Override
-            public void onClick(View view) {
-                clickListener.onClick(cardView);
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+                if (gestureDetector.onTouchEvent(motionEvent)) {
+                    return false;
+                }
+                return true;
             }
         });
 
@@ -97,6 +115,43 @@ public class CardPagerAdapter extends PagerAdapter implements CardAdapter {
     }
 
     public interface ClickListener {
-        public void onClick(View view);
+        void onClick(CardView firstCard, int position);
+
+        void onFlingUp(CardView firstCard, int position);
+
+        void onFlingDown(CardView firstCard, int position);
     }
+
+
+    private static final int SWIPE_MIN_DISTANCE = 120;
+    private static final int SWIPE_THRESHOLD_VELOCITY = 200;
+
+    private class GestureListener extends GestureDetector.SimpleOnGestureListener {
+        CardView firstCard;  int position;
+
+        public GestureListener(CardView firstCard, int position) {
+            this.firstCard = firstCard;
+            this.position = position;
+        }
+
+        @Override
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+            if (e1.getX() - e2.getX() > SWIPE_MIN_DISTANCE && Math.abs(velocityX) > SWIPE_THRESHOLD_VELOCITY) {
+                return false; // Right to left
+            } else if (e2.getX() - e1.getX() > SWIPE_MIN_DISTANCE && Math.abs(velocityX) > SWIPE_THRESHOLD_VELOCITY) {
+                return false; // Left to right
+            }
+
+            if (e1.getY() - e2.getY() > SWIPE_MIN_DISTANCE && Math.abs(velocityY) > SWIPE_THRESHOLD_VELOCITY) {
+                clickListener.onFlingUp(firstCard,position);
+                return false; // Bottom to top
+            } else if (e2.getY() - e1.getY() > SWIPE_MIN_DISTANCE && Math.abs(velocityY) > SWIPE_THRESHOLD_VELOCITY) {
+                clickListener.onFlingDown(firstCard,position);
+                return false; // Top to bottom
+            }
+            return false;
+        }
+    }
+
+
 }
